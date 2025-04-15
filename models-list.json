@@ -6,22 +6,22 @@
   },
   "models": [
     {
-      "id": "masha-01",
-      "name": "Masha 3d model 1",
-      "description": "Masha in clear weather",
-      "category": "people",
-      "tags": ["people", "home"],
-      "thumbnail": "models/thumbnail/masha-01.png",
+      "id": "Vasya",
+      "name": "Vasya in 3d",
+      "description": "Vasya in 3d",
+      "category": "toy",
+      "tags": ["toy", "home"],
+      "thumbnail": "models/thumbnail/vasya.png",
       "model": {
         "format": "obj",
-        "fileName": "masha-01.obj",
+        "fileName": "vasya.obj",
         "vertexCount": "500000",
         "polygonCount": "600000",
         "size": "20MB"
       },
       "archive": {
         "type": "zip",
-        "fileName": "models/masha-01.zip",
+        "fileName": "models/vasya.zip",
         "size": "20MB",
         "pass": false,
         "multipart": false
@@ -30,22 +30,22 @@
       "createdAt": "2025-04-14"
     },
     {
-      "id": "masha-02",
-      "name": "Masha 3d model 2",
-      "description": "Masha in cloudy weather",
-      "category": "people",
-      "tags": ["people", "home"],
-      "thumbnail": "models/thumbnail/masha-02.png",
+      "id": "Axolotl",
+      "name": "Axolotl in 3d",
+      "description": "Axolotl toy",
+      "category": "toy",
+      "tags": ["toy", "home"],
+      "thumbnail": "models/thumbnail/axolotl.png",
       "model": {
-        "format": "obj",
-        "fileName": "masha-02.obj",
+        "format": "stl",
+        "fileName": "axolotl.stl",
         "vertexCount": "500000",
         "polygonCount": "600000",
         "size": "20MB"
       },
       "archive": {
         "type": "zip",
-        "fileName": "models/masha-02.zip",
+        "fileName": "models/axolotl.zip",
         "size": "20MB",
         "pass": false,
         "multipart": true,
@@ -57,13 +57,12 @@
   ],
   "archiveGroups": [
     {
-      "baseName": "people",
-      "description": "Collection of people",
-      "parts": 1,
+      "baseName": "toys",
+      "description": "Collection of toys",
       "totalSize": "20MB",
       "contains": [
-        "Masha-01",
-        "Masha-02"
+        "Vasya",
+        "Axolotl"
       ]
     }
   ]
