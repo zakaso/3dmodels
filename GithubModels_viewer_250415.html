@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Модель Просмотрщик</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.175.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.175.0/examples/jsm/"
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 20px;
+        }
+        
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .sidebar {
+            width: 280px;
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            z-index: 5;
+            height: 100%;
+        }
+        
+        .viewer-container {
+            flex: 1;
+            position: relative;
+            background-color: #1a1a1a; /* Темный фон для вьювера */
+            overflow: hidden;
+        }
+        
+        #viewer {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        .model-card {
+            background-color: #34495e;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .model-card:hover, .model-card:active {
+            background-color: #3498db;
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .model-card h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #ecf0f1;
+            font-size: 16px;
+        }
+        
+        .model-card p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #bdc3c7;
+        }
+        
+        .model-card .tags {
+            display: flex;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        .model-card .tag {
+            background-color: #2980b9;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        
+        .status-bar {
+            background-color: #2c3e50;
+            color: white;
+            padding: 8px 15px;
+            font-size: 14px;
+            z-index: 10;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 100;
+            display: none;
+        }
+        
+        .progress-container {
+            width: 80%;
+            max-width: 400px;
+            margin: 20px 0;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #2c3e50;
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #3498db;
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 5px;
+        }
+        
+        .progress-text {
+            margin-top: 8px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .spinner {
+            border: 5px solid #2c3e50;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .controls-help {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background-color: rgba(0,0,0,0.6);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 4;
+            max-width: 90%;
+            transition: opacity 0.3s ease;
+        }
+        
+        .controls-help p {
+            margin: 5px 0;
+        }
+        
+        .no-webgl {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(231, 76, 60, 0.9);
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            text-align: center;
+            z-index: 101;
+        }
+        
+        .action-buttons {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            gap: 10px;
+            z-index: 5;
+        }
+        
+        .action-button {
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        .action-button:hover, .action-button:active {
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+        
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        
+        /* Адаптивная верстка для мобильных устройств */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 18px;
+            }
+            
+            .menu-toggle {
+                display: block;
+            }
+            
+            .sidebar {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 80%;
+                max-width: 300px;
+                transform: translateX(-100%);
+                box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .sidebar-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(0,0,0,0.5);
+                z-index: 4;
+                display: none;
+            }
+            
+            .sidebar-overlay.open {
+                display: block;
+            }
+            
+            .controls-help {
+                font-size: 12px;
+                padding: 8px;
+                bottom: 10px;
+                left: 10px;
+            }
+            
+            .action-buttons {
+                top: 10px;
+                right: 10px;
+            }
+            
+            .action-button {
+                width: 36px;
+                height: 36px;
+            }
+            
+            .progress-container {
+                width: 90%;
+            }
+        }
+        
+        /* Стили для полноэкранного режима */
+        .fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            background-color: #000;
+        }
+        
+        /* Анимация для подсказок */
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        
+        .fade-out {
+            animation: fadeOut 1s ease forwards;
+            animation-delay: 5s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button class="menu-toggle" id="menu-toggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h1>3D Модель Просмотрщик</h1>
+        </div>
+        
+        <div class="main-content">
+            <div class="sidebar-overlay" id="sidebar-overlay"></div>
+            <div class="sidebar" id="sidebar">
+                <h2>Доступные 3D модели</h2>
+                <div id="models-list"></div>
+            </div>
+            
+            <div class="viewer-container">
+                <canvas id="viewer"></canvas>
+                
+                <div class="action-buttons">
+                    <button class="action-button" id="fullscreen-btn" title="На весь экран">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button class="action-button" id="help-toggle" title="Показать/скрыть подсказки">
+                        <i class="fas fa-question"></i>
+                    </button>
+                </div>
+                
+                <div class="controls-help fade-out" id="controls-help">
+                    <p><strong>Вращение:</strong> Левая кнопка мыши / один палец</p>
+                    <p><strong>Перемещение:</strong> Правая кнопка мыши / два пальца</p>
+                    <p><strong>Масштаб:</strong> Колесо мыши / жест щипка</p>
+                </div>
+                
+                <div class="loading-overlay" id="loading-overlay">
+                    <div class="spinner"></div>
+                    <div id="loading-text">Загрузка модели...</div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                        <div class="progress-text" id="progress-text">0%</div>
+                    </div>
+                </div>
+                
+                <div class="no-webgl" id="no-webgl">
+                    <h2>Ошибка WebGL</h2>
+                    <p>Ваше устройство не поддерживает WebGL или он отключен.</p>
+                    <p>Попробуйте использовать другой браузер или устройство.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status-bar" id="status-bar">Готов к загрузке моделей</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+        // Глобальные переменные
+        let scene, camera, renderer, controls;
+        let currentModel = null;
+        let modelsData = null;
+        // Константа с базовым URL
+        const baseUrl = 'https://zakaso.github.io/3dmodels/';
+        let isFullscreen = false;
+        let isHelpVisible = true;
+        
+        let lastRenderTime = 0;
+        const targetFPS = window.innerWidth <= 768 ? 30 : 60;
+        const frameInterval = 1000 / targetFPS;
+        
+        let lastTime = 0;
+        let fps = 0;
+
+        // Инициализация Three.js
+        function initThreeJS() {
+            // Проверка поддержки WebGL
+            if (!isWebGLAvailable()) {
+                document.getElementById('no-webgl').style.display = 'block';
+                return false;
+            }
+
+            // Настройка сцены
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a); // Темный фон для сцены
+
+            // Настройка камеры
+            const container = document.querySelector('.viewer-container');
+            const aspect = container.clientWidth / container.clientHeight;
+            camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+            camera.position.z = 5;
+
+            // Настройка рендерера
+            const canvas = document.getElementById('viewer');
+            //renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer = new THREE.WebGLRenderer({ 
+                canvas, 
+                antialias: window.innerWidth > 768, // только для десктопов
+                powerPreference: 'high-performance',
+                preserveDrawingBuffer: false
+            });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+            // Добавление освещения
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+            
+            // Добавление контролов для управления камерой
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.25;
+            controls.screenSpacePanning = true;
+            controls.enableZoom = true;
+            controls.enablePan = true;
+            controls.enableRotate = true;
+
+            // Обработчик изменения размера окна
+            window.addEventListener('resize', onWindowResize);
+
+            // Запуск анимационного цикла
+            animate();
+            return true;
+        }
+
+        // Функция проверки поддержки WebGL
+        function isWebGLAvailable() {
+            try {
+                const canvas = document.createElement('canvas');
+                return !!(window.WebGLRenderingContext && 
+                    (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // Функция анимации
+        function animate(currentTime) {
+            requestAnimationFrame(animate);
+
+            // Считаем FPS
+            if (lastTime) {
+                fps = Math.round(1000 / (currentTime - lastTime));
+                document.getElementById('status-bar').textContent = `FPS: ${fps}`;
+            }
+            lastTime = currentTime;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        /*function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }*/
+
+        // Обработчик изменения размера окна
+        function onWindowResize() {
+            const container = document.querySelector('.viewer-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        // Обновление прогресса загрузки
+        function updateProgress(percent, message) {
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            const loadingText = document.getElementById('loading-text');
+            
+            progressFill.style.width = `${percent}%`;
+            progressText.textContent = `${percent}%`;
+            
+            if (message) {
+                loadingText.textContent = message;
+            }
+        }
+
+        // Загрузка JSON файла с моделями
+        async function loadModelsData() {
+            try {
+                showLoading('Загрузка списка моделей...');
+                updateProgress(0, 'Загрузка списка моделей...');
+                
+                // Загружаем JSON файл
+                const response = await fetch(`${baseUrl}/models-list.json`);
+                if (!response.ok) {
+                    throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`);
+                }
+                
+                updateProgress(50, 'Обработка данных...');
+                
+                const text = await response.text();
+                try {
+                    modelsData = JSON.parse(text);
+                    updateProgress(100, 'Загрузка завершена');
+                    
+                    setTimeout(() => {
+                        displayModelsList(modelsData.models);
+                        updateStatus(`Загружено ${modelsData.models.length} моделей`);
+                        hideLoading();
+                    }, 500);
+                } catch (jsonError) {
+                    throw new Error(`Ошибка парсинга JSON: ${jsonError.message}`);
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки данных моделей:', error);
+                updateStatus(`Ошибка: ${error.message}`);
+                hideLoading();
+            }
+        }
+
+        // Отображение списка моделей
+        function displayModelsList(models) {
+            const modelsListElement = document.getElementById('models-list');
+            modelsListElement.innerHTML = '';
+            
+            if (!models || models.length === 0) {
+                modelsListElement.innerHTML = '<p>Нет доступных моделей</p>';
+                return;
+            }
+            
+            models.forEach(model => {
+                const modelCard = document.createElement('div');
+                modelCard.className = 'model-card';
+                modelCard.onclick = () => {
+                    downloadAndShowModel(model);
+                    // На мобильных устройствах закрываем меню после выбора модели
+                    if (window.innerWidth <= 768) {
+                        toggleSidebar(false);
+                    }
+                };
+                
+                let tagsHtml = '';
+                if (model.tags && model.tags.length > 0) {
+                    tagsHtml = '<div class="tags">' + 
+                        model.tags.map(tag => `<span class="tag">${tag}</span>`).join('') + 
+                        '</div>';
+                }
+                
+                modelCard.innerHTML = `
+                    <h3>${model.name}</h3>
+                    <p>${model.description}</p>
+                    <p>Формат: ${model.model.format.toUpperCase()}</p>
+                    <p>Размер: ${model.archive.size}</p>
+                    ${tagsHtml}
+                `;
+                
+                modelsListElement.appendChild(modelCard);
+            });
+        }
+
+        // Загрузка и отображение выбранной модели
+        async function downloadAndShowModel(model) {
+            try {
+                showLoading('Проверка архива модели...');
+                updateProgress(0, 'Проверка архива модели...');
+                updateStatus(`Загрузка модели: ${model.name}`);
+
+                // Проверяем, является ли архив многотомным
+                const archiveBaseName = `${baseUrl}/${model.archive.fileName}`;
+                const isMultipart = await checkIfMultipartArchive(archiveBaseName);
+
+                let archiveData;
+
+                if (isMultipart) {
+                    // Загрузка многотомного архива
+                    archiveData = await downloadMultipartArchive(archiveBaseName);
+                } else {
+                    // Загрузка обычного архива с отслеживанием прогресса
+                    archiveData = await downloadSingleArchive(archiveBaseName);
+                }
+
+                updateProgress(50, 'Распаковка архива...');
+                updateStatus('Распаковка архива...');
+
+                // Распаковка архива
+                const zip = new JSZip();
+                const zipContent = await zip.loadAsync(archiveData);
+
+                // Проверка пароля, если требуется
+                if (model.archive.pass) {
+                    const password = prompt("Этот архив защищен паролем. Введите пароль:");
+                    if (!password) {
+                        throw new Error("Пароль не введен");
+                    }
+                    // В реальном приложении здесь должна быть логика проверки пароля
+                }
+
+                updateProgress(70, 'Поиск файла модели...');
+
+                // Поиск файла модели в архиве
+                const modelFileName = model.model.fileName;
+                const modelFile = zipContent.file(modelFileName) || 
+                                Object.values(zipContent.files).find(file => 
+                                    file.name.includes(modelFileName.replace('.', '\\.')));
+
+                if (!modelFile) {
+                    throw new Error(`Файл модели ${modelFileName} не найден в архиве`);
+                }
+
+                // Извлечение файла модели
+                updateProgress(80, 'Извлечение файла модели...');
+                updateStatus('Извлечение файла модели...');
+                const modelData = await modelFile.async('arraybuffer');
+                
+                // Загрузка модели в Three.js
+                updateProgress(90, 'Загрузка модели в просмотрщик...');
+                updateStatus('Загрузка модели в просмотрщик...');
+                loadModelIntoScene(modelData, model.model.format);
+
+            } catch (error) {
+                console.error('Ошибка при загрузке модели:', error);
+                updateStatus(`Ошибка: ${error.message}`);
+                hideLoading();
+            }
+        }
+
+        // Проверка, является ли архив многотомным
+        async function checkIfMultipartArchive(archiveBaseName) {
+            try {
+                // Проверяем существование первой части архива
+                const firstPartUrl = `${archiveBaseName}.001`;
+                const response = await fetch(firstPartUrl, { method: 'HEAD' });
+                return response.ok;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        // Загрузка обычного архива
+        async function downloadSingleArchive(archiveUrl) {
+            const response = await fetch(archiveUrl);
+
+            if (!response.ok) {
+                throw new Error(`Ошибка загрузки архива: ${response.status} ${response.statusText}`);
+            }
+
+            const reader = response.body.getReader();
+            const contentLength = +response.headers.get('Content-Length');
+
+            let receivedLength = 0;
+            let chunks = [];
+
+            while(true) {
+                const {done, value} = await reader.read();
+
+                if (done) {
+                    break;
+                }
+
+                chunks.push(value);
+                receivedLength += value.length;
+
+                // Обновление прогресса загрузки
+                const percentComplete = Math.round((receivedLength / contentLength) * 50);
+                updateProgress(percentComplete, 'Загрузка архива модели...');
+            }
+
+            // Объединение всех фрагментов в один ArrayBuffer
+            let archiveData = new Uint8Array(receivedLength);
+            let position = 0;
+            for(let chunk of chunks) {
+                archiveData.set(chunk, position);
+                position += chunk.length;
+            }
+
+            return archiveData.buffer;
+        }
+
+        // Загрузка многотомного архива
+        async function downloadMultipartArchive(archiveBaseName) {
+            updateStatus('Обнаружен многотомный архив. Определение количества частей...');
+
+            // Определяем количество частей архива
+            let partIndex = 1;
+            let totalParts = 0;
+            let totalSize = 0;
+            let partSizes = [];
+
+            // Сначала проверяем все части, чтобы узнать их количество и размер
+            while (true) {
+                const partUrl = `${archiveBaseName}.${String(partIndex).padStart(3, '0')}`;
+                try {
+                    const response = await fetch(partUrl, { method: 'HEAD' });
+                    if (!response.ok) {
+                        break;
+                    }
+
+                    const partSize = +response.headers.get('Content-Length');
+                    partSizes.push(partSize);
+                    totalSize += partSize;
+                    totalParts++;
+                    partIndex++;
+                } catch (error) {
+                    break;
+                }
+            }
+
+            if (totalParts === 0) {
+                throw new Error('Не найдены части многотомного архива');
+            }
+
+            updateStatus(`Найдено ${totalParts} частей архива. Начинаем загрузку...`);
+
+            // Создаем буфер для всего архива
+            let completeArchive = new Uint8Array(totalSize);
+            let position = 0;
+
+            // Загружаем каждую часть и добавляем в общий буфер
+            for (let i = 1; i <= totalParts; i++) {
+                const partUrl = `${archiveBaseName}.${String(i).padStart(3, '0')}`;
+                updateStatus(`Загрузка части ${i} из ${totalParts}...`);
+
+                const response = await fetch(partUrl);
+                if (!response.ok) {
+                    throw new Error(`Ошибка загрузки части ${i}: ${response.status} ${response.statusText}`);
+                }
+
+                const reader = response.body.getReader();
+                let receivedLength = 0;
+                const partSize = partSizes[i-1];
+
+                while(true) {
+                    const {done, value} = await reader.read();
+
+                    if (done) {
+                        break;
+                    }
+
+                    completeArchive.set(value, position);
+                    position += value.length;
+                    receivedLength += value.length;
+
+                    // Обновление прогресса загрузки
+                    const partProgress = receivedLength / partSize;
+                    const overallProgress = Math.round(((i - 1 + partProgress) / totalParts) * 50);
+                    updateProgress(overallProgress, `Загрузка части ${i} из ${totalParts}...`);
+                }
+            }
+
+            updateStatus('Все части архива загружены. Объединение...');
+            return completeArchive.buffer;
+        }
+
+        // Загрузка модели в сцену Three.js
+        function loadModelIntoScene(modelData, format) {
+            // Очистка предыдущей модели
+            if (currentModel) {
+                scene.remove(currentModel);
+                currentModel = null;
+            }
+            
+            // Создание blob URL для загрузки модели
+            const blob = new Blob([modelData]);
+            const modelUrl = URL.createObjectURL(blob);
+            
+            // Загрузка модели в зависимости от формата
+            if (format.toLowerCase() === 'obj') {
+                const loader = new OBJLoader();
+                loader.load(modelUrl, (object) => {
+                    setupModel(object);
+                    URL.revokeObjectURL(modelUrl);
+                    updateProgress(100, 'Модель успешно загружена');
+                    updateStatus('Модель OBJ успешно загружена');
+                    setTimeout(hideLoading, 500);
+                }, 
+                (xhr) => {
+                    if (xhr.lengthComputable) {
+                        const percent = Math.round((xhr.loaded / xhr.total) * 10) + 90;
+                        updateProgress(percent, 'Загрузка модели в просмотрщик...');
+                    }
+                },
+                (error) => {
+                    console.error('Ошибка загрузки OBJ модели:', error);
+                    updateStatus('Ошибка загрузки OBJ модели');
+                    URL.revokeObjectURL(modelUrl);
+                    hideLoading();
+                });
+            } else if (format.toLowerCase() === 'stl') {
+                const loader = new STLLoader();
+                loader.load(modelUrl, (geometry) => {
+                    const material = new THREE.MeshPhongMaterial({ color: 0xAAAAAA, specular: 0x111111, shininess: 200 });
+                    const mesh = new THREE.Mesh(geometry, material);
+                    setupModel(mesh);
+                    URL.revokeObjectURL(modelUrl);
+                    updateProgress(100, 'Модель успешно загружена');
+                    updateStatus('Модель STL успешно загружена');
+                    setTimeout(hideLoading, 500);
+                },
+                (xhr) => {
+                    if (xhr.lengthComputable) {
+                        const percent = Math.round((xhr.loaded / xhr.total) * 10) + 90;
+                        updateProgress(percent, 'Загрузка модели в просмотрщик...');
+                    }
+                },
+                (error) => {
+                    console.error('Ошибка загрузки STL модели:', error);
+                    updateStatus('Ошибка загрузки STL модели');
+                    URL.revokeObjectURL(modelUrl);
+                    hideLoading();
+                });
+            } else {
+                updateStatus(`Неподдерживаемый формат модели: ${format}`);
+                hideLoading();
+            }
+        }
+
+        // Настройка модели в сцене
+        function setupModel(object) {
+            // Центрирование модели
+            const box = new THREE.Box3().setFromObject(object);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            
+            // Перемещение модели в центр
+            object.position.x = -center.x;
+            object.position.y = -center.y;
+            object.position.z = -center.z;
+            
+            // Масштабирование модели
+            const maxDim = Math.max(size.x, size.y, size.z);
+            if (maxDim > 10) {
+                const scale = 10 / maxDim;
+                object.scale.set(scale, scale, scale);
+            }
+            
+            // Добавление модели в сцену
+            scene.add(object);
+            currentModel = object;
+            
+            // Сброс контролов камеры
+            controls.reset();
+            
+            // Позиционирование камеры
+            const distance = Math.max(size.x, size.y, size.z) * 1.5;
+            camera.position.set(0, 0, distance);
+            camera.lookAt(0, 0, 0);
+        }
+
+        // Обновление статусной строки
+        function updateStatus(message) {
+            document.getElementById('status-bar').textContent = message;
+        }
+
+        // Показать индикатор загрузки
+        function showLoading(message) {
+            const overlay = document.getElementById('loading-overlay');
+            const loadingText = document.getElementById('loading-text');
+            loadingText.textContent = message || 'Загрузка...';
+            overlay.style.display = 'flex';
+            
+            // Сбросить прогресс
+            updateProgress(0);
+        }
+
+        // Скрыть индикатор загрузки
+        function hideLoading() {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+
+        // Переключение боковой панели (для мобильных устройств)
+        function toggleSidebar(show) {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            
+            if (show === undefined) {
+                sidebar.classList.toggle('open');
+                overlay.classList.toggle('open');
+            } else if (show) {
+                sidebar.classList.add('open');
+                overlay.classList.add('open');
+            } else {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('open');
+            }
+        }
+
+        // Переключение полноэкранного режима
+        function toggleFullscreen() {
+            const container = document.querySelector('.viewer-container');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            
+            if (!isFullscreen) {
+                // Вход в полноэкранный режим
+                if (container.requestFullscreen) {
+                    container.requestFullscreen();
+                } else if (container.mozRequestFullScreen) {
+                    container.mozRequestFullScreen();
+                } else if (container.webkitRequestFullscreen) {
+                    container.webkitRequestFullscreen();
+                } else if (container.msRequestFullscreen) {
+                    container.msRequestFullscreen();
+                }
+                fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+                isFullscreen = true;
+            } else {
+                // Выход из полноэкранного режима
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    document.mozCancelFullScreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+                isFullscreen = false;
+            }
+            
+            // Перерасчет размеров после изменения режима
+            setTimeout(onWindowResize, 100);
+        }
+
+        // Переключение видимости подсказок
+        function toggleHelp() {
+            const helpElement = document.getElementById('controls-help');
+            isHelpVisible = !isHelpVisible;
+            
+            if (isHelpVisible) {
+                helpElement.style.display = 'block';
+                helpElement.classList.remove('fade-out');
+                setTimeout(() => {
+                    helpElement.classList.add('fade-out');
+                }, 100);
+            } else {
+                helpElement.style.display = 'none';
+            }
+        }
+
+        // Обработка события изменения полноэкранного режима
+        function handleFullscreenChange() {
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            
+            if (document.fullscreenElement || 
+                document.webkitFullscreenElement || 
+                document.mozFullScreenElement || 
+                document.msFullscreenElement) {
+                fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+                isFullscreen = true;
+            } else {
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+                isFullscreen = false;
+            }
+            
+            // Перерасчет размеров после изменения режима
+            setTimeout(onWindowResize, 100);
+        }
+
+        // Инициализация приложения
+        document.addEventListener('DOMContentLoaded', () => {
+            // Инициализация Three.js
+            if (initThreeJS()) {
+                // Загрузка моделей при запуске
+                loadModelsData();
+                
+                // Обработчики событий для мобильного меню
+                document.getElementById('menu-toggle').addEventListener('click', toggleSidebar);
+                document.getElementById('sidebar-overlay').addEventListener('click', () => toggleSidebar(false));
+                
+                // Обработчики для кнопок действий
+                document.getElementById('fullscreen-btn').addEventListener('click', toggleFullscreen);
+                document.getElementById('help-toggle').addEventListener('click', toggleHelp);
+                
+                // Обработчики событий изменения полноэкранного режима
+                document.addEventListener('fullscreenchange', handleFullscreenChange);
+                document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+                document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+                document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+                
+                // Обработка событий касания для мобильных устройств
+                let touchStartTime = 0;
+                let touchEndTime = 0;
+                
+                document.getElementById('viewer').addEventListener('touchstart', () => {
+                    touchStartTime = new Date().getTime();
+                });
+                
+                document.getElementById('viewer').addEventListener('touchend', () => {
+                    touchEndTime = new Date().getTime();
+                    const touchDuration = touchEndTime - touchStartTime;
+                    
+                    // Долгое нажатие (более 500 мс) для показа/скрытия подсказок
+                    if (touchDuration > 500) {
+                        toggleHelp();
+                    }
+                });
+                
+                // Автоматически скрывать подсказки на мобильных устройствах после 5 секунд
+                if (window.innerWidth <= 768) {
+                    const helpElement = document.getElementById('controls-help');
+                    helpElement.classList.add('fade-out');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

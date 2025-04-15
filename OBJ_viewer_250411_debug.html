@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>3D Модель с управлением</title>
+    <style>
+        :fullscreen, ::backdrop {
+            background-color: #333333;
+        }
+
+        /* Для Webkit (Chrome, Safari) */
+        ::-webkit-full-screen {
+            background-color: #333333;
+        }
+
+        /* Для Firefox */
+        :-moz-full-screen {
+            background-color: #333333;
+        }
+
+        /* Для IE/Edge */
+        :-ms-fullscreen {
+            background-color: #333333;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            min-height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            touch-action: none;
+            -webkit-overflow-scrolling: none;
+            overscroll-behavior: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #333333;
+        }
+        
+        body {
+            margin: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            height: calc(var(--vh, 1vh) * 100);
+            min-height: -webkit-fill-available; /* Для WebKit-браузеров */
+            touch-action: none; /* Предотвращаем стандартные сенсорные действия браузера */
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: none;
+            position: absolute;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 10px;
+            max-width: 80%;
+            z-index: 100;
+        }
+        #debug {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            max-width: 80%;
+            overflow: auto;
+            max-height: 150px;
+            font-size: 10px;
+            z-index: 100;
+        }
+        #progressContainer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 300px;
+            background-color: rgba(0, 0, 0, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            display: none;
+            z-index: 200;
+        }
+        #progressBar {
+            width: 100%;
+            height: 20px;
+            background-color: #333;
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        #progressFill {
+            height: 100%;
+            background-color: #4CAF50;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        #progressText {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        #webglErrorMessage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 0, 0, 0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            z-index: 1000;
+            max-width: 80%;
+            display: none;
+        }
+        #fullscreenButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 200;
+            padding: 8px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <p>Вращение: Левая кнопка мыши / один палец</p>
+        <p>Перемещение: Правая кнопка мыши / два пальца</p>
+        <p>Масштаб: Колесо мыши / жест щипка</p>
+    </div>
+    
+    <div id="debug">Инициализация...</div>
+    
+    <div id="progressContainer">
+        <h3>Загрузка модели</h3>
+        <div id="progressBar">
+            <div id="progressFill"></div>
+        </div>
+        <div id="progressText">Подготовка...</div>
+    </div>
+    
+    <div id="webglErrorMessage">
+        <h3>Ошибка WebGL</h3>
+        <p>Ваше устройство не поддерживает WebGL или он отключен.</p>
+        <p>Попробуйте использовать другой браузер или устройство.</p>
+    </div>
+    
+    <button id="fullscreenButton">На весь экран</button>
+    
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <script>
+        // Кэшируем элемент и настройки, чтобы не искать их каждый раз
+        const debugElement = document.getElementById('debug');
+        const MAX_LINES = 50; // Уменьшено для слабых устройств
+        let isScrolling = false;
+
+        // Очистка debug панели при запуске
+        debugElement.innerHTML = '';
+
+        // Функция логирования для отображения отладочной информации
+        function log(message) {
+            // Используем requestAnimationFrame для плавности
+            requestAnimationFrame(() => {
+                if (!debugElement) return;
+
+                // Создаем элемент вместо innerHTML (быстрее и безопаснее)
+                const line = document.createElement('div');
+                line.textContent = message;
+                debugElement.appendChild(line);
+
+                // Удаляем лишние строки (если их больше MAX_LINES)
+                while (debugElement.children.length > MAX_LINES) {
+                    debugElement.removeChild(debugElement.firstChild);
+                }
+
+                // Логируем в консоль
+                console.log(message);
+
+                // Прокручиваем только если не в процессе скролла (оптимизация)
+                if (!isScrolling) {
+                    isScrolling = true;
+                    line.scrollIntoView({ behavior: 'smooth' });
+                    
+                    // Сбрасываем флаг после прокрутки
+                    setTimeout(() => { isScrolling = false; }, 300);
+                }
+            });
+        }
+
+        // Функция для логирования размеров экрана
+        function logScreenDimensions(label = "Размеры экрана") {
+            const inner = `innerWidth: ${window.innerWidth}, innerHeight: ${window.innerHeight}`;
+            const outer = `outerWidth: ${window.outerWidth}, outerHeight: ${window.outerHeight}`;
+            const client = `clientWidth: ${document.documentElement.clientWidth}, clientHeight: ${document.documentElement.clientHeight}`;
+            const offset = `offsetWidth: ${document.documentElement.offsetWidth}, offsetHeight: ${document.documentElement.offsetHeight}`;
+            const scroll = `scrollWidth: ${document.documentElement.scrollWidth}, scrollHeight: ${document.documentElement.scrollHeight}`;
+            const screen = `screen.width: ${window.screen.width}, screen.height: ${window.screen.height}`;
+            const avail = `screen.availWidth: ${window.screen.availWidth}, screen.availHeight: ${window.screen.availHeight}`;
+            const ratio = `pixelRatio: ${window.devicePixelRatio}`;
+            const vh = `--vh value: ${parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--vh')) * 100}px`;
+            const bodyHeight = `body.height: ${document.body.clientHeight}px`;
+            const htmlHeight = `html.height: ${document.documentElement.style.height}`;
+            
+            log(`${label} - ${inner}`);
+            log(`Window outer: ${outer}`);
+            log(`Document client: ${client}`);
+            log(`Document offset: ${offset}`);
+            log(`Document scroll: ${scroll}`);
+            log(`Screen: ${screen}`);
+            log(`Screen available: ${avail}`);
+            log(`Pixel ratio: ${ratio}`);
+            log(`CSS vh value: ${vh}`);
+            log(`Body height: ${bodyHeight}`);
+            log(`HTML height: ${htmlHeight}`);
+            
+            // Проверяем fullscreen статус
+            const fsElement = document.fullscreenElement || document.webkitFullscreenElement || 
+                              document.msFullscreenElement || document.mozFullScreenElement;
+            log(`Fullscreen: ${fsElement ? 'Да' : 'Нет'}`);
+            
+            // Detect browser and version
+            log(`User Agent: ${navigator.userAgent.substr(0, 50)}...`);
+        }
+
+        // Функция управления индикатором прогресса
+        function updateProgress(visible, percent, message) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            progressContainer.style.display = visible ? 'block' : 'none';
+            
+            if (visible) {
+                progressFill.style.width = percent + '%';
+                progressText.textContent = message;
+            }
+        }
+        
+        // Функция для проверки поддержки WebGL
+        function isWebGLAvailable() {
+            try {
+                const canvas = document.createElement('canvas');
+                return !!(window.WebGLRenderingContext && 
+                    (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+            } catch (e) {
+                return false;
+            }
+        }
+        
+        // Предотвращение нежелательных действий браузера
+        function preventDefaultBehavior(e) {
+            e.preventDefault();
+        }
+        
+        // Функция для проверки мобильного устройства
+        const isMobile = () => {
+            const ua = navigator.userAgent;
+            return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|YaBrowser/i.test(ua);
+        };
+
+        // Функция для установки правильной высоты на мобильных устройствах
+        function setCorrectHeight() {
+            let vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+            
+            if (/Android/i.test(navigator.userAgent)) {
+                document.documentElement.style.height = `${window.innerHeight}px`;
+                document.body.style.height = `${window.innerHeight}px`;
+            }
+            
+            // Логируем установленные размеры
+            log(`Установка высоты: innerHeight=${window.innerHeight}, vh=${vh * 100}px`);
+            
+            if (/Android/i.test(navigator.userAgent)) {
+                log(`Android: установлено html.height=${document.documentElement.style.height}`);
+                log(`Android: установлено body.height=${document.body.style.height}`);
+            }
+        }
+
+        // Запускаем функцию установки высоты сразу
+        setCorrectHeight();
+        
+        // Логируем исходные размеры
+        logScreenDimensions("Исходные размеры");
+
+        document.addEventListener('touchmove', preventDefaultBehavior, { passive: false });
+        document.addEventListener('wheel', preventDefaultBehavior, { passive: false });
+
+        // Добавляем код для скрытия адресной строки на мобильном
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                window.scrollTo(0, 1);
+                setCorrectHeight();
+                logScreenDimensions("После скрытия адресной строки");
+            }, 100);
+        });
+        
+        // Проверка поддержки WebGL
+        if (!isWebGLAvailable()) {
+            document.getElementById('webglErrorMessage').style.display = 'block';
+            log('ОШИБКА: WebGL не поддерживается на этом устройстве');
+        } else {
+            log('WebGL поддерживается');
+            
+            // Проверка, загрузились ли библиотеки
+            if (typeof THREE === 'undefined') {
+                log('ОШИБКА: Three.js не загружен');
+            } else {
+                log('Three.js загружен успешно');
+                
+                if (typeof THREE.OBJLoader === 'undefined') {
+                    log('ОШИБКА: OBJLoader не загружен');
+                } else {
+                    log('OBJLoader загружен успешно');
+                }
+                
+                if (typeof THREE.OrbitControls === 'undefined') {
+                    log('ОШИБКА: OrbitControls не загружен');
+                } else {
+                    log('OrbitControls загружен успешно');
+                }
+                
+                if (typeof JSZip === 'undefined') {
+                    log('ОШИБКА: JSZip не загружен');
+                } else {
+                    log('JSZip загружен успешно');
+                }
+            }
+
+            try {
+                // Определение типа устройства
+                const deviceType = isMobile() ? 'мобильное устройство' : 'настольное устройство';
+                log(`Обнаружено ${deviceType}`);
+                
+                // Инициализация Three.js
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x333333);
+                
+                // Настройка камеры
+                const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.z = 5;
+                
+                // Настройка рендерера с оптимизацией для мобильных устройств
+                const renderer = new THREE.WebGLRenderer({ 
+                    antialias: !isMobile(), // Отключаем сглаживание на мобильных для производительности
+                    powerPreference: 'high-performance',
+                    preserveDrawingBuffer: false
+                });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(isMobile() ? Math.min(window.devicePixelRatio, 2) : window.devicePixelRatio);
+                document.body.appendChild(renderer.domElement);
+                
+                // Добавление освещения
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+                directionalLight.position.set(1, 1, 1);
+                scene.add(directionalLight);
+                
+                // Добавление OrbitControls с поддержкой сенсорных действий
+                const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.25;
+                controls.screenSpacePanning = true;
+                
+                // Настройка сенсорных жестов
+                controls.touches = {
+                    ONE: THREE.TOUCH.ROTATE,
+                    TWO: THREE.TOUCH.DOLLY_PAN
+                };
+                
+                // Добавляем ограничение зума для предотвращения странного поведения
+                controls.minDistance = 1;
+                controls.maxDistance = 20;
+                
+                // Ограничение вертикального вращения для предотвращения переворота
+                controls.minPolarAngle = 0.1;
+                controls.maxPolarAngle = Math.PI - 0.1;
+                
+                // Создание и добавление куба для проверки рендеринга
+                //const geometry = new THREE.BoxGeometry(1, 1, 1);
+                //const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
+                //const cube = new THREE.Mesh(geometry, material);
+                //scene.add(cube);
+                //log('Тестовый куб добавлен для проверки рендеринга');
+                
+                // Base64-строка ZIP-архива с моделью
+                const base64Model = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+                
+                // Функция для декодирования Base64 порциями, чтобы не блокировать UI
+                async function decodeBase64Chunked(base64Data) {
+                    return new Promise(async (resolve) => {
+                        log('Начинаем декодирование модели из Base64...');
+                        
+                        // Показываем прогресс декодирования Base64
+                        const totalChunks = Math.ceil(base64Data.length / 100000); // Меньшие чанки для мобильных
+                        let processedChunks = 0;
+                        
+                        // Преобразуем Base64 в массив байтов с отображением прогресса
+                        try {
+                            // Для более эффективной работы на мобильных устройствах
+                            // создаем массив сразу нужного размера
+                            const binaryString = atob(base64Data);
+                            const bytes = new Uint8Array(binaryString.length);
+                            
+                            // Декодируем чанками для отображения прогресса и предотвращения блокировки UI
+                            const chunkSize = isMobile() ? 20000 : 100000; // Меньшие чанки для мобильных
+                            
+                            for (let i = 0; i < binaryString.length; i += chunkSize) {
+                                const end = Math.min(i + chunkSize, binaryString.length);
+                                for (let j = i; j < end; j++) {
+                                    bytes[j] = binaryString.charCodeAt(j);
+                                }
+                                
+                                processedChunks++;
+                                const percent = Math.min(30, Math.round(processedChunks / totalChunks * 30));
+                                updateProgress(true, percent, `Декодирование данных: ${percent}%`);
+                                
+                                // Даем время для обновления интерфейса и сборщику мусора
+                                await new Promise(resolve => setTimeout(resolve, 0));
+                            }
+                            
+                            resolve(bytes);
+                        } catch (e) {
+                            log('ОШИБКА при декодировании Base64: ' + e.message);
+                            console.error(e);
+                            resolve(null);
+                        }
+                    });
+                }
+                
+                // Функция для загрузки модели из закодированных данных
+                async function loadModelFromBase64(base64Data) {
+                    try {
+                        // Если строка пустая (для тестирования), используем только тестовый куб
+                        if (base64Data === '') {
+                            log('Base64 строка не задана, используем только тестовый куб');
+                            updateProgress(false, 0, '');
+                            return;
+                        }
+                        
+                        // Декодируем Base64 в бинарные данные
+                        updateProgress(true, 0, 'Декодирование данных...');
+                        let bytes = await decodeBase64Chunked(base64Data);
+                        
+                        if (!bytes) {
+                            throw new Error('Не удалось декодировать Base64 данные');
+                        }
+                        
+                        // Распаковываем ZIP-архив с отображением прогресса
+                        log('Распаковываем ZIP-архив...');
+                        updateProgress(true, 30, 'Распаковка ZIP-архива...');
+                        
+                        const zip = new JSZip();
+                        await zip.loadAsync(bytes, {
+                            onUpdate: (metadata) => {
+                                const percent = 30 + Math.round(metadata.percent * 0.4);
+                                updateProgress(true, percent, `Распаковка: ${Math.round(metadata.percent)}%`);
+                            }
+                        });
+                        
+                        // Освобождаем память от больших массивов
+                        bytes = null;
+                        
+                        // Найдем первый OBJ-файл в архиве
+                        let objContent = null;
+                        let objFilename = null;
+                        let filesProcessed = 0;
+                        const totalFiles = Object.keys(zip.files).length;
+                        
+                        updateProgress(true, 70, 'Поиск OBJ-файла в архиве...');
+                        
+                        for (const filename in zip.files) {
+                            if (filename.toLowerCase().endsWith('.obj')) {
+                                objFilename = filename;
+                                updateProgress(true, 75, `Извлечение файла: ${filename}`);
+                                objContent = await zip.files[filename].async('string');
+                                break;
+                            }
+                            
+                            filesProcessed++;
+                            const percent = 70 + Math.round(filesProcessed / totalFiles * 5);
+                            updateProgress(true, percent, `Сканирование: ${filesProcessed}/${totalFiles}`);
+                            
+                            // Даем время для обновления интерфейса
+                            await new Promise(resolve => setTimeout(resolve, 0));
+                        }
+                        
+                        if (!objContent) {
+                            updateProgress(false, 0, '');
+                            throw new Error('OBJ файл не найден в ZIP-архиве');
+                        }
+                        
+                        log('Модель успешно извлечена из архива: ' + objFilename);
+                        updateProgress(true, 80, 'Парсинг 3D-модели...');
+                        
+                        // Загружаем OBJ модель из строки
+                        const loader = new THREE.OBJLoader();
+                        
+                        // Даем время завершить другие операции перед началом парсинга
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                        
+                        const object = loader.parse(objContent);
+                        
+                        // Освобождаем память
+                        objContent = null;
+                        
+                        updateProgress(true, 90, 'Подготовка модели...');
+                        log('Модель успешно загружена!');
+
+                        // Удаляем тестовый куб после загрузки модели
+                        //scene.remove(cube);
+
+                        // Создаем вспомогательную группу для манипуляций
+                        const modelGroup = new THREE.Group();
+                        scene.add(modelGroup);
+
+                        // Вычисляем размеры и центр
+                        const box = new THREE.Box3().setFromObject(object);
+                        const center = box.getCenter(new THREE.Vector3());
+                        const size = box.getSize(new THREE.Vector3());
+
+                        log('Центр модели: X=' + center.x.toFixed(2) + ', Y=' + center.y.toFixed(2) + ', Z=' + center.z.toFixed(2));
+                        log('Размеры: X=' + size.x.toFixed(2) + ', Y=' + size.y.toFixed(2) + ', Z=' + size.z.toFixed(2));
+
+                        // Добавляем объект в группу
+                        modelGroup.add(object);
+
+                        // Центрируем объект
+                        object.position.set(-center.x, -center.y, -center.z);
+
+                        // Масштабирование для правильного отображения
+                        const maxDim = Math.max(size.x, size.y, size.z);
+                        const scale = 3 / maxDim;
+                        modelGroup.scale.set(scale, scale, scale);
+
+                        // Устанавливаем центр вращения камеры
+                        controls.target.set(0, 0, 0);
+
+                        // Отойдем камерой
+                        camera.position.set(0, 0, 5);
+                        camera.lookAt(0, 0, 0);
+
+                        // Обновляем управление после изменений
+                        controls.update();
+
+                        log('Модель центрирована и подготовлена');
+                        updateProgress(true, 100, 'Загрузка завершена!');
+                        
+                        // Скрываем прогресс после паузы
+                        setTimeout(() => {
+                            updateProgress(false, 0, '');
+                        }, 1000);
+                        
+                    } catch (e) {
+                        updateProgress(false, 0, '');
+                        log('ОШИБКА загрузки модели: ' + e.message);
+                        console.error(e);
+                    }
+                }
+                
+                // Загружаем модель из Base64
+                loadModelFromBase64(base64Model);
+                
+                // Добавление оси координат для ориентации
+                // const axesHelper = new THREE.AxesHelper(5);
+                // scene.add(axesHelper);
+                
+                // Обработка изменения размера окна
+                function handleResize() {
+                    // Логируем размеры перед изменениями
+                    logScreenDimensions("До изменения размеров");
+                    
+                    // Обновление переменной --vh
+                    setCorrectHeight();
+                    
+                    // Обновляем камеру
+                    camera.aspect = window.innerWidth / window.innerHeight;
+                    camera.updateProjectionMatrix();
+                    
+                    // Обновляем рендерер
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                    
+                    // Принудительное скрытие адресной строки для Android
+                    if (/Android/i.test(navigator.userAgent)) {
+                        setTimeout(() => {
+                            window.scrollTo(0, 1);
+                        }, 100);
+                    }
+                    
+                    // Логируем размеры после изменений
+                    setTimeout(() => {
+                        logScreenDimensions("После изменения размеров");
+                    }, 200);
+                }
+                
+                window.addEventListener('resize', handleResize, false);
+                
+                // Обработка ориентации экрана на мобильных устройствах
+                window.addEventListener('orientationchange', function() {
+                    log(`Изменение ориентации: ${window.orientation}°`);
+                    
+                    // Даем задержку для правильного пересчета размеров
+                    setTimeout(() => {
+                        log("Размеры после смены ориентации");
+                        handleResize();
+                    }, 200);
+                });
+                
+                // Обработка видимости страницы (пауза рендеринга при неактивной странице)
+                let isPageActive = true;
+                
+                document.addEventListener('visibilitychange', function() {
+                    isPageActive = !document.hidden;
+                    log(`Видимость страницы изменена: ${isPageActive ? 'видима' : 'скрыта'}`);
+                });
+                
+                // Параметры для адаптивного рендеринга
+                let lastRenderTime = 0;
+                const targetFPS = isMobile() ? 30 : 60;
+                const frameInterval = 1000 / targetFPS;
+                
+                // Анимация и рендеринг с учетом производительности устройства
+                function animate(currentTime) {
+                    requestAnimationFrame(animate);
+                    
+                    // Пропускаем рендеринг, если страница не активна
+                    if (!isPageActive) return;
+                    
+                    // Адаптивный рендеринг для экономии ресурсов
+                    if (currentTime - lastRenderTime < frameInterval) return;
+                    
+                    lastRenderTime = currentTime;
+                    controls.update(); // Обновление управления
+                    renderer.render(scene, camera);
+                }
+                
+                animate();
+                log('Рендеринг запущен');
+                
+            } catch (e) {
+                log('КРИТИЧЕСКАЯ ОШИБКА: ' + e.message);
+                console.error(e);
+            }
+        }
+        
+        // Переход в полноэкранный режим
+        function toggleFullScreen() {
+            const doc = document.documentElement;
+            const requestFullscreen = doc.requestFullscreen || doc.webkitRequestFullscreen || doc.msRequestFullscreen || doc.mozRequestFullScreen;
+            const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen || document.mozCancelFullScreen;
+
+            log("Запрос на переключение полноэкранного режима");
+            
+            if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || document.mozFullScreenElement) {
+                log("Выход из полноэкранного режима");
+                exitFullscreen.call(document).then(() => {
+                    log("Выход из полноэкранного режима успешен");
+                    logScreenDimensions("После выхода из полноэкранного режима");
+                }).catch(err => {
+                    log(`Ошибка при выходе из полноэкранного режима: ${err.message}`);
+                });
+            } else {
+                log("Вход в полноэкранный режим");
+                requestFullscreen.call(doc).then(() => {
+                    log("Вход в полноэкранный режим успешен");
+                    setTimeout(() => {
+                        logScreenDimensions("После входа в полноэкранный режим");
+                        setCorrectHeight();
+                    }, 100);
+                }).catch(err => {
+                    log(`Ошибка Fullscreen: ${err.message}`);
+                    // Fallback для Яндекс.Браузера и Android
+                    if (isMobile()) {
+                        log("Применение fallback для мобильных устройств");
+                        document.querySelector('meta[name="viewport"]').content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+                        window.scrollTo(0, 1);
+                        setCorrectHeight();
+                        setTimeout(() => {
+                            logScreenDimensions("После применения fallback");
+                        }, 100);
+                    }
+                });
+            }
+
+            // Дополнительно фиксируем размеры после изменения режима
+            setTimeout(() => {
+                setCorrectHeight();
+                log("Коррекция высоты после 100ms");
+            }, 100);
+            
+            setTimeout(() => {
+                setCorrectHeight();
+                log("Коррекция высоты после 300ms");
+            }, 300);
+            
+            setTimeout(() => {
+                setCorrectHeight();
+                logScreenDimensions("Финальная проверка размеров через 500ms");
+            }, 500);
+        }
+        
+        // Назначаем обработчик для кнопки
+        document.getElementById('fullscreenButton').addEventListener('click', toggleFullScreen);
+
+        // Автоматический Fullscreen для мобильных (включая Яндекс.Браузер)
+        document.addEventListener('DOMContentLoaded', () => {
+            log("DOMContentLoaded событие");
+            logScreenDimensions("При загрузке DOM");
+            
+            if (isMobile()) {
+                log("Определено мобильное устройство, автоматический запрос fullscreen");
+                setTimeout(() => {
+                    toggleFullScreen();
+                    setCorrectHeight();
+                }, 300); // Задержка для корректной работы
+            }
+        });
+        
+        // Вызываем при загрузке страницы и изменении размера окна
+        window.addEventListener('load', function() {
+            log("Window load событие");
+            logScreenDimensions("При полной загрузке страницы");
+            handleResize();
+        });
+        
+        window.addEventListener('resize', handleResize);
+        
+        // Исправление размеров при изменении режима экрана
+        window.addEventListener('orientationchange', handleResize);
+        
+        // Обработчики событий fullscreen
+        document.addEventListener('fullscreenchange', function() {
+            log(`Событие fullscreenchange: ${document.fullscreenElement ? 'Вход' : 'Выход'}`);
+            handleResize();
+        });
+        
+        document.addEventListener('webkitfullscreenchange', function() {
+            log(`Событие webkitfullscreenchange: ${document.webkitFullscreenElement ? 'Вход' : 'Выход'}`);
+            handleResize();
+        });
+        
+        document.addEventListener('mozfullscreenchange', function() {
+            log(`Событие mozfullscreenchange: ${document.mozFullScreenElement ? 'Вход' : 'Выход'}`);
+            handleResize();
+        });
+        
+        document.addEventListener('MSFullscreenChange', function() {
+            log(`Событие MSFullscreenChange: ${document.msFullscreenElement ? 'Вход' : 'Выход'}`);
+            handleResize();
+        });
+        
+        // Дополнительные обработчики для Android
+        if (/Android/i.test(navigator.userAgent)) {
+            log("Настройка дополнительных обработчиков для Android");
+            
+            // Повторная установка высоты несколько раз после загрузки
+            setTimeout(() => {
+                setCorrectHeight();
+                log("Android коррекция 100ms");
+            }, 100);
+            
+            setTimeout(() => {
+                setCorrectHeight();
+                log("Android коррекция 500ms");
+            }, 500);
+            
+            setTimeout(() => {
+                setCorrectHeight();
+                log("Android коррекция 1000ms");
+            }, 1000);
+            
+            setTimeout(() => {
+                setCorrectHeight();
+                log("Android коррекция 2000ms");
+                logScreenDimensions("Финальные размеры Android");
+            }, 2000);
+            
+            // Попытка определить наличие системных панелей
+            const hasNotch = window.innerWidth !== window.screen.width || 
+                             window.innerHeight !== window.screen.height;
+            log(`Возможное наличие системных панелей/notch: ${hasNotch ? 'Да' : 'Нет'}`);
+            
+            // Информация о версии Android
+            const androidMatch = navigator.userAgent.match(/Android\s([0-9\.]+)/);
+            if (androidMatch) {
+                log(`Версия Android: ${androidMatch[1]}`);
+            }
+        }
+    </script>
+</body>
+</html>
