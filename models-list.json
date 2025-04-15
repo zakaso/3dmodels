@@ -35,10 +35,10 @@
       "description": "Axolotl toy",
       "category": "toy",
       "tags": ["toy", "home"],
-      "thumbnail": "models/thumbnail/axolotl.png",
+      "thumbnail": "models/thumbnail/Axolotl.png",
       "model": {
         "format": "stl",
-        "fileName": "axolotl.stl",
+        "fileName": "Axolotl.stl",
         "vertexCount": "500000",
         "polygonCount": "600000",
         "size": "20MB"
