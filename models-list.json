@@ -21,7 +21,7 @@
       },
       "archive": {
         "type": "zip",
-        "fileName": "models/vasya.zip",
+        "fileName": "models/Vasya.zip",
         "size": "20MB",
         "pass": false,
         "multipart": false
@@ -45,7 +45,7 @@
       },
       "archive": {
         "type": "zip",
-        "fileName": "models/axolotl.zip",
+        "fileName": "models/Axolotl.zip",
         "size": "20MB",
         "pass": false,
         "multipart": true,
