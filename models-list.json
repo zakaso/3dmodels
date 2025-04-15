@@ -49,10 +49,7 @@
         "size": "20MB",
         "pass": false,
         "multipart": true,
-		"parts": [
-			{"url": "models/masha-02.zip.001"},
-			{"url": "models/masha-02.zip.002"}
-		]
+	"parts": 2
       },
       "license": "HomeUseOnly",
       "createdAt": "2025-04-14"
