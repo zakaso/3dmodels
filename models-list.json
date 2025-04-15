@@ -11,10 +11,10 @@
       "description": "Vasya in 3d",
       "category": "toy",
       "tags": ["toy", "home"],
-      "thumbnail": "models/thumbnail/vasya.png",
+      "thumbnail": "models/thumbnail/Vasya.png",
       "model": {
         "format": "obj",
-        "fileName": "vasya.obj",
+        "fileName": "Vasya.obj",
         "vertexCount": "500000",
         "polygonCount": "600000",
         "size": "20MB"
