@@ -23,7 +23,7 @@
         "type": "zip",
         "fileName": "models/masha-01.zip",
         "size": "20MB",
-        "pass": "yes"
+        "pass": "no"
       },
       "license": "HomeUseOnly",
       "createdAt": "2025-04-14"
